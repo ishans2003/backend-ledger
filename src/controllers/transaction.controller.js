@@ -26,14 +26,16 @@ async function createTransaction(req, res) {
      */
     const { fromAccount, toAccount, amount, idempotencyKey } = req.body
 
-    if (!fromAccount || !toAccount || !amount || !idempotencyKey) {
+    const numericAmount = Number(amount)
+    if (!fromAccount || !toAccount || !idempotencyKey || !Number.isFinite(numericAmount) || numericAmount <= 0) {
         return res.status(400).json({
-            message: "FromAccount, toAccount, amount and idempotencyKey are required"
+            message: "FromAccount, toAccount and idempotencyKey are required, and amount must be a positive number"
         })
     }
 
     const fromUserAccount = await accountModel.findOne({
         _id: fromAccount,
+        user: req.user._id
     })
 
     const toUserAccount = await accountModel.findOne({
@@ -44,6 +46,10 @@ async function createTransaction(req, res) {
         return res.status(400).json({
             message: "Invalid fromAccount or toAccount"
         })
+    }
+
+    if (fromUserAccount._id.equals(toUserAccount._id)) {
+        return res.status(400).json({ message: "Source and destination accounts must be different" })
     }
 
     /**
@@ -97,33 +103,34 @@ async function createTransaction(req, res) {
      */
     const balance = await fromUserAccount.getBalance()
 
-    if (balance < amount) {
+    if (balance < numericAmount) {
         return res.status(400).json({
-            message: `Insufficient balance. Current balance is ${balance}. Requested amount is ${amount}`
+            message: `Insufficient balance. Current balance is ${balance}. Requested amount is ${numericAmount}`
         })
     }
 
     let transaction;
+    let session;
     try {
 
 
         /**
          * 5. Create transaction (PENDING)
          */
-        const session = await mongoose.startSession()
+        session = await mongoose.startSession()
         session.startTransaction()
 
         transaction = (await transactionModel.create([ {
             fromAccount,
             toAccount,
-            amount,
+            amount: numericAmount,
             idempotencyKey,
             status: "PENDING"
         } ], { session }))[ 0 ]
 
         const debitLedgerEntry = await ledgerModel.create([ {
             account: fromAccount,
-            amount: amount,
+            amount: numericAmount,
             transaction: transaction._id,
             type: "DEBIT"
         } ], { session })
@@ -134,7 +141,7 @@ async function createTransaction(req, res) {
 
         const creditLedgerEntry = await ledgerModel.create([ {
             account: toAccount,
-            amount: amount,
+            amount: numericAmount,
             transaction: transaction._id,
             type: "CREDIT"
         } ], { session })
@@ -147,12 +154,15 @@ async function createTransaction(req, res) {
 
 
         await session.commitTransaction()
-        session.endSession()
     } catch (error) {
+        console.error("Transaction processing failed:", error)
+        if (session?.inTransaction()) await session.abortTransaction()
 
         return res.status(400).json({
             message: "Transaction is Pending due to some issue, please retry after sometime",
         })
+    } finally {
+        await session?.endSession()
 
     }
     /**
@@ -169,10 +179,11 @@ async function createTransaction(req, res) {
 
 async function createInitialFundsTransaction(req, res) {
     const { toAccount, amount, idempotencyKey } = req.body
+    const numericAmount = Number(amount)
 
-    if (!toAccount || !amount || !idempotencyKey) {
+    if (!toAccount || !idempotencyKey || !Number.isFinite(numericAmount) || numericAmount <= 0) {
         return res.status(400).json({
-            message: "toAccount, amount and idempotencyKey are required"
+            message: "toAccount and idempotencyKey are required, and amount must be a positive number"
         })
     }
 
@@ -180,9 +191,9 @@ async function createInitialFundsTransaction(req, res) {
         _id: toAccount,
     })
 
-    if (!toUserAccount) {
+    if (!toUserAccount || toUserAccount.status !== "ACTIVE") {
         return res.status(400).json({
-            message: "Invalid toAccount"
+            message: "Invalid or inactive toAccount"
         })
     }
 
@@ -190,9 +201,9 @@ async function createInitialFundsTransaction(req, res) {
         user: req.user._id
     })
 
-    if (!fromUserAccount) {
+    if (!fromUserAccount || fromUserAccount.status !== "ACTIVE") {
         return res.status(400).json({
-            message: "System user account not found"
+            message: "System user has no active funding account"
         })
     }
 
@@ -203,21 +214,21 @@ async function createInitialFundsTransaction(req, res) {
     const transaction = new transactionModel({
         fromAccount: fromUserAccount._id,
         toAccount,
-        amount,
+        amount: numericAmount,
         idempotencyKey,
         status: "PENDING"
     })
 
     const debitLedgerEntry = await ledgerModel.create([ {
         account: fromUserAccount._id,
-        amount: amount,
+        amount: numericAmount,
         transaction: transaction._id,
         type: "DEBIT"
     } ], { session })
 
     const creditLedgerEntry = await ledgerModel.create([ {
         account: toAccount,
-        amount: amount,
+        amount: numericAmount,
         transaction: transaction._id,
         type: "CREDIT"
     } ], { session })

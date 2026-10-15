@@ -3,16 +3,13 @@ const mongoose = require("mongoose")
 
 
 function connectToDB() {
+    if (!process.env.MONGO_URI) {
+        return Promise.reject(new Error("MONGO_URI is not configured"))
+    }
 
-    mongoose.connect(process.env.MONGO_URI)
-        .then(() => {
-            console.log("server is connected to DB")
-        })
-        .catch(err => {
-            console.log("Error connecting to DB")
-            process.exit(1)
-        })
-
+    return mongoose.connect(process.env.MONGO_URI).then(() => {
+        console.log("Server is connected to the database")
+    })
 }
 
 
