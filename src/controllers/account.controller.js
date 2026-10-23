@@ -6,7 +6,8 @@ async function createAccountController(req, res) {
     const user = req.user;
 
     const account = await accountModel.create({
-        user: user._id
+        user: user._id,
+        balance: 0
     })
 
     res.status(201).json({

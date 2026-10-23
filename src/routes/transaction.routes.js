@@ -10,6 +10,7 @@ const transactionRoutes = Router();
  */
 
 transactionRoutes.post("/", authMiddleware.authMiddleware, transactionController.createTransaction)
+transactionRoutes.get("/", authMiddleware.authMiddleware, transactionController.listUserTransactions)
 
 
 /**

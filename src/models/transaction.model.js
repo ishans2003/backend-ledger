@@ -5,7 +5,7 @@ const transactionSchema = new mongoose.Schema({
     fromAccount: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "account",
-        required: [ true, "Transaction must be associated with a from account" ],
+        required: false,
         index: true
     },
     toAccount: {
@@ -32,6 +32,23 @@ const transactionSchema = new mongoose.Schema({
         required: [ true, "Idempotency Key is required for creating a transaction" ],
         index: true,
         unique: true
+    },
+    kind: {
+        type: String,
+        enum: ["TRANSFER", "FUNDING", "REFUND"],
+        default: "TRANSFER",
+        index: true
+    },
+    providerPaymentId: {
+        type: String,
+        sparse: true,
+        unique: true
+    },
+    providerRefundId: { type: String, sparse: true, unique: true },
+    initiatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "user",
+        index: true
     }
 }, {
     timestamps: true
@@ -40,4 +57,4 @@ const transactionSchema = new mongoose.Schema({
 const transactionModel = mongoose.model("transaction", transactionSchema)
 
 
-module.exports = transactionModel   
+module.exports = transactionModel

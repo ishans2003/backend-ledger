@@ -15,10 +15,18 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: [ true, "Name is required for creating an account" ]
     },
+    role: { type: String, enum: ["USER", "ADMIN"], default: "USER" },
+    status: { type: String, enum: ["ACTIVE", "SUSPENDED"], default: "ACTIVE" },
+    emailVerified: { type: Boolean, default: false },
+    sessionVersion: { type: Number, default: 0 },
+    emailVerificationTokenHash: String,
+    emailVerificationExpires: Date,
+    passwordResetTokenHash: String,
+    passwordResetExpires: Date,
     password: {
         type: String,
         required: [ true, "Password is required for creating an account" ],
-        minlength: [ 6, "password should contain more than 6 character" ],
+        minlength: [ 8, "password should contain at least 8 characters" ],
         select: false
     },
     systemUser: {
@@ -44,9 +52,6 @@ userSchema.pre("save", async function () {
 })
 
 userSchema.methods.comparePassword = async function (password) {
-
-    console.log(password, this.password)
-
     return await bcrypt.compare(password, this.password)
 
 }
