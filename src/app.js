@@ -15,7 +15,9 @@ app.use((req, res, next) => {
         res.setHeader("Access-Control-Allow-Credentials", "true")
         res.setHeader("Vary", "Origin")
     } else if (origin) {
-        return res.status(403).json({ message: "This origin is not allowed" })
+        const forwardedProtocol = req.get("x-forwarded-proto")?.split(",")[0]?.trim()
+        const requestOrigin = `${forwardedProtocol || req.protocol}://${req.get("host")}`
+        if (origin !== requestOrigin) return res.status(403).json({ message: "This origin is not allowed" })
     }
     if (req.method === "OPTIONS") {
         res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
